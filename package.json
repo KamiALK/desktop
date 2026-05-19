@@ -1,0 +1,16 @@
+{
+  "name": "bar-desktop",
+  "version": "1.0.0",
+  "description": "Musicali Bar Desktop",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.0",
+    "electron": "^42.2.0"
+  }
+}

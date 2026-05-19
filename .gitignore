@@ -1,0 +1,5 @@
+node_modules/
+yt-dlp.exe
+*.log
+.DS_Store
+Thumbs.db

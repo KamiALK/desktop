@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://192.168.0.3:5251 http://192.168.0.3:5251">
+  <title>Musicali Bar</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #titlebar {
+      height: 32px;
+      background: #111;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      -webkit-app-region: drag;
+      border-bottom: 1px solid #222;
+      flex-shrink: 0;
+    }
+
+    #titlebar span {
+      font-size: 11px;
+      color: #555;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    #status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #333;
+      margin-right: 8px;
+      transition: background 0.3s;
+    }
+
+    #status-dot.connected { background: #00ff88; }
+    #status-dot.connecting { background: #ffaa00; animation: pulse 1s infinite; }
+    #status-dot.error { background: #ff4444; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    #main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      overflow: hidden;
+    }
+
+    #player-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      position: relative;
+    }
+
+    #now-playing {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    #song-title {
+      font-size: 28px;
+      font-weight: bold;
+      letter-spacing: -0.5px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    #song-artist {
+      font-size: 14px;
+      color: #555;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    #download-status {
+      margin-top: 16px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: #111;
+      border: 1px solid #222;
+      color: #555;
+      min-width: 200px;
+      text-align: center;
+    }
+
+    #download-status.downloading {
+      border-color: #ffaa00;
+      color: #ffaa00;
+    }
+
+    #download-status.ready {
+      border-color: #00ff88;
+      color: #00ff88;
+    }
+
+    #download-status.cached {
+      border-color: #0088ff;
+      color: #0088ff;
+    }
+
+    #download-status.error {
+      border-color: #ff4444;
+      color: #ff4444;
+    }
+
+    #sidebar {
+      background: #0d0d0d;
+      border-left: 1px solid #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #config-section {
+      padding: 20px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    #config-section h3 {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .config-row {
+      margin-bottom: 10px;
+    }
+
+    .config-row label {
+      display: block;
+      font-size: 10px;
+      color: #444;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .config-row input {
+      width: 100%;
+      background: #111;
+      border: 1px solid #222;
+      color: #ccc;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .config-row input:focus {
+      border-color: #444;
+    }
+
+    #btn-connect {
+      width: 100%;
+      padding: 8px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 2px;
+      margin-top: 8px;
+      transition: all 0.2s;
+    }
+
+    #btn-connect:hover {
+      background: #222;
+      border-color: #555;
+      color: #fff;
+    }
+
+    #log-section {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    #log-section h3 {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 10px;
+      color: #444;
+      line-height: 1.6;
+    }
+
+    #log .entry {
+      padding: 2px 0;
+      border-bottom: 1px solid #111;
+    }
+
+    #log .entry.info { color: #555; }
+    #log .entry.success { color: #00ff88; }
+    #log .entry.warn { color: #ffaa00; }
+    #log .entry.error { color: #ff4444; }
+
+    #log::-webkit-scrollbar { width: 3px; }
+    #log::-webkit-scrollbar-track { background: transparent; }
+    #log::-webkit-scrollbar-thumb { background: #222; }
+
+    #videos-count {
+      padding: 12px 20px;
+      border-top: 1px solid #1a1a1a;
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="titlebar">
+  <div id="status-dot"></div>
+  <span>Musicali Bar — Desktop</span>
+</div>
+
+<div id="main">
+  <div id="player-section">
+    <div id="now-playing">
+      <div id="song-title">Sin canción</div>
+      <div id="song-artist">—</div>
+    </div>
+    <div id="download-status">Esperando...</div>
+    <video id="video-player" style="width:100%;height:100%;display:none;background:#000" controls></video>
+  </div>
+
+  <div id="sidebar">
+    <div id="config-section">
+      <h3>Configuración</h3>
+      <div class="config-row">
+        <label>API URL</label>
+        <input id="input-api" type="text" value="http://192.168.0.3:5251" placeholder="http://...">
+      </div>
+      <div class="config-row">
+        <label>Tenant ID</label>
+        <input id="input-tenant" type="text" placeholder="uuid...">
+      </div>
+      <div class="config-row">
+        <label>Token</label>
+        <input id="input-token" type="password" placeholder="Bearer token...">
+      </div>
+      <button id="btn-connect">Conectar</button>
+    </div>
+
+    <div id="log-section">
+      <h3>Log</h3>
+      <div id="log"></div>
+    </div>
+
+    <div id="videos-count" id="videos-count">0 videos descargados</div>
+  </div>
+</div>
+
+<script src="signalr.min.js"></script>
+<script>
+  let connection = null
+  const dot = document.getElementById('status-dot')
+  const logEl = document.getElementById('log')
+
+  function log(msg, type = 'info') {
+    const time = new Date().toLocaleTimeString()
+    const entry = document.createElement('div')
+    entry.className = `entry ${type}`
+    entry.textContent = `${time} ${msg}`
+    logEl.appendChild(entry)
+    logEl.scrollTop = logEl.scrollHeight
+  }
+
+  async function updateVideoCount() {
+    const videos = await window.electronAPI.listVideos()
+    document.getElementById('videos-count').textContent = `${videos.length} videos descargados`
+  }
+
+  async function handleCancionActual(data) {
+    log(`► ${data.titulo}`, 'success')
+    document.getElementById('song-title').textContent = data.titulo || 'Sin título'
+    document.getElementById('song-artist').textContent = data.fuente || '—'
+
+    const statusEl = document.getElementById('download-status')
+
+    if (!data.youtubeId) {
+      statusEl.className = 'error'
+      statusEl.textContent = 'Sin YouTube ID'
+      return
+    }
+
+    // Verificar si ya está descargado
+    const existing = await window.electronAPI.checkVideo(data.youtubeId)
+    if (existing) {
+      statusEl.className = 'cached'
+      statusEl.textContent = '✓ Ya descargado'
+      log(`Cache hit: ${data.youtubeId}`, 'info')
+      await updateVideoCount()
+      return
+    }
+
+    // Descargar
+    statusEl.className = 'downloading'
+    statusEl.textContent = '⬇ Descargando...'
+    log(`Descargando: ${data.youtubeId}`, 'warn')
+
+    try {
+      const result = await window.electronAPI.downloadVideo({
+        youtubeId: data.youtubeId,
+        title: data.titulo
+      })
+      statusEl.className = 'ready'
+      statusEl.textContent = '✓ Listo para reproducir'
+      log(`Descargado: ${result.path}`, 'success')
+
+      const videoPath = result.path.replace(/\\/g, '/')
+      const videoUrl = `file:///${videoPath}`
+      const player = document.getElementById('video-player')
+      player.style.display = 'block'
+      player.src = videoUrl
+      player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
+
+      await updateVideoCount()
+    } catch (err) {
+      statusEl.className = 'error'
+      statusEl.textContent = '✗ Error descargando'
+      log(`Error: ${err.error || err}`, 'error')
+    }
+  }
+
+  document.getElementById('btn-connect').addEventListener('click', async () => {
+    const api = document.getElementById('input-api').value.trim()
+    const tenant = document.getElementById('input-tenant').value.trim()
+    const token = document.getElementById('input-token').value.trim()
+
+    if (!api || !tenant || !token) {
+      log('Faltan campos de configuración', 'error')
+      return
+    }
+
+    // Guardar config
+    localStorage.setItem('bar-api', api)
+    localStorage.setItem('bar-tenant', tenant)
+    localStorage.setItem('bar-token', token)
+
+    if (connection) {
+      await connection.stop()
+    }
+
+    dot.className = 'connecting'
+    log('Conectando a SignalR...', 'warn')
+
+    connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${api}/hubs/bar`, {
+        accessTokenFactory: () => token
+      })
+      .withAutomaticReconnect()
+      .build()
+
+    connection.on('CancionActual', handleCancionActual)
+    connection.on('CancionActual', (data) => console.log('MSG', data))
+
+    connection.onreconnecting(() => {
+      dot.className = 'connecting'
+      log('Reconectando...', 'warn')
+    })
+
+    connection.onreconnected(() => {
+      dot.className = 'connected'
+      log('Reconectado', 'success')
+    })
+
+    connection.onclose(() => {
+      dot.className = 'error'
+      log('Desconectado', 'error')
+    })
+
+    // Timeout para que no se cuelgue si no hay respuesta
+    const connTimeout = setTimeout(() => {
+      connection.stop()
+      dot.className = 'error'
+      log('Timeout: el backend no respondió', 'error')
+    }, 10000)
+
+    try {
+      await connection.start()
+      clearTimeout(connTimeout)
+      dot.className = 'connected'
+      log('Conectado al backend', 'success')
+    } catch (e) {
+      clearTimeout(connTimeout)
+      dot.className = 'error'
+      log(`Error: ${e?.message || 'desconocido'}`, 'error')
+      console.error('SignalR error:', e)
+    }
+  })
+
+  // Restaurar config guardada
+  window.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('input-api').value = localStorage.getItem('bar-api') || 'http://192.168.0.3:5251'
+    document.getElementById('input-tenant').value = localStorage.getItem('bar-tenant') || ''
+    document.getElementById('input-token').value = localStorage.getItem('bar-token') || ''
+    await updateVideoCount()
+    log('App iniciada', 'info')
+  })
+</script>
+</body>
+</html>
