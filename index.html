@@ -234,6 +234,72 @@
     #log::-webkit-scrollbar-track { background: transparent; }
     #log::-webkit-scrollbar-thumb { background: #222; }
 
+    #queue-section {
+      border-top: 1px solid #1a1a1a;
+      padding: 12px 20px;
+      max-height: 200px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #queue-section h3 {
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+
+    #queue-list {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 11px;
+    }
+
+    #queue-list .q-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid #111;
+      color: #555;
+    }
+
+    #queue-list .q-item .q-pos {
+      font-size: 9px;
+      color: #333;
+      min-width: 16px;
+      text-align: right;
+    }
+
+    #queue-list .q-item .q-title {
+      color: #888;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #queue-list .q-item .q-badge {
+      font-size: 8px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      background: #1a1a1a;
+      color: #555;
+      margin-left: auto;
+      text-transform: uppercase;
+    }
+
+    #queue-list .q-item.current .q-pos,
+    #queue-list .q-item.current .q-title {
+      color: #00ff88;
+    }
+
+    #queue-list::-webkit-scrollbar { width: 3px; }
+    #queue-list::-webkit-scrollbar-track { background: transparent; }
+    #queue-list::-webkit-scrollbar-thumb { background: #222; }
+
     #videos-count {
       padding: 12px 20px;
       border-top: 1px solid #1a1a1a;
@@ -283,13 +349,25 @@
       <div id="log"></div>
     </div>
 
-    <div id="videos-count" id="videos-count">0 videos descargados</div>
+    <div id="queue-section">
+      <h3>Próximas</h3>
+      <div id="queue-list"></div>
+    </div>
+
+    <div id="videos-count">0 videos descargados</div>
   </div>
 </div>
 
 <script src="signalr.min.js"></script>
 <script>
   let connection = null
+  let _api = ''
+  let _tenant = ''
+  let _token = ''
+  let currentVideoId = null
+  let prefetchInterval = null
+  const downloadingIds = new Set()
+
   const dot = document.getElementById('status-dot')
   const logEl = document.getElementById('log')
 
@@ -307,7 +385,131 @@
     document.getElementById('videos-count').textContent = `${videos.length} videos descargados`
   }
 
+  async function actualizarCola() {
+    if (!_api || !_tenant || !_token) return
+    try {
+      const res = await fetch(`${_api}/api/PlayQueue`, {
+        headers: {
+          'Authorization': `Bearer ${_token}`,
+          'X-Tenant-Id': _tenant
+        }
+      })
+      if (!res.ok) return
+      const queue = await res.json()
+      const list = document.getElementById('queue-list')
+      list.innerHTML = queue.map((item, i) => {
+        const isCurrent = item.status === 'playing'
+        const title = item.song?.title || 'Sin título'
+        const source = item.requestId ? 'pedida' : item.isTransition ? 'transición' : 'auto'
+        return `<div class="q-item${isCurrent ? ' current' : ''}">
+          <span class="q-pos">${isCurrent ? '▶' : i + 1}</span>
+          <span class="q-title">${escHtml(title)}</span>
+          <span class="q-badge">${source}</span>
+        </div>`
+      }).join('')
+    } catch {}
+  }
+
+  function escHtml(s) {
+    const d = document.createElement('div')
+    d.textContent = s
+    return d.innerHTML
+  }
+
+  function playVideo(filePath) {
+    const videoPath = filePath.replace(/\\/g, '/')
+    const videoUrl = `file:///${videoPath}`
+    const player = document.getElementById('video-player')
+    player.style.display = 'block'
+    player.src = videoUrl
+    player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
+  }
+
+  async function siguienteCancion() {
+    if (!_api || !_tenant || !_token) return
+    log('Canción terminada, avanzando...', 'info')
+    try {
+      const res = await fetch(`${_api}/api/PlayQueue/next`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${_token}`,
+          'X-Tenant-Id': _tenant
+        }
+      })
+      if (!res.ok) log('No hay siguiente canción', 'warn')
+    } catch (e) {
+      log(`Error avanzando: ${e.message}`, 'error')
+    }
+  }
+
+  async function ensureDownloaded(youtubeId, title) {
+    // Si ya se está descargando (prefetch), esperar a que termine
+    if (downloadingIds.has(youtubeId)) {
+      log(`Esperando descarga en curso: ${youtubeId}`, 'info')
+      while (downloadingIds.has(youtubeId)) {
+        await new Promise(r => setTimeout(r, 500))
+      }
+      const cached = await window.electronAPI.checkVideo(youtubeId)
+      if (cached) return cached
+    }
+
+    const existing = await window.electronAPI.checkVideo(youtubeId)
+    if (existing) return existing
+
+    downloadingIds.add(youtubeId)
+    try {
+      const result = await window.electronAPI.downloadVideo({ youtubeId, title })
+      return result.path
+    } finally {
+      downloadingIds.delete(youtubeId)
+    }
+  }
+
+  async function prefetchNext(count = 3) {
+    if (!_api || !_tenant || !_token) return
+
+    try {
+      const res = await fetch(`${_api}/api/PlayQueue`, {
+        headers: {
+          'Authorization': `Bearer ${_token}`,
+          'X-Tenant-Id': _tenant
+        }
+      })
+      if (!res.ok) return
+      const queue = await res.json()
+
+      // Saltar la primera (la actual), tomar las siguientes 'count'
+      const upcoming = queue.filter((_, i) => i > 0).slice(0, count)
+      if (upcoming.length === 0) return
+
+      log(`Precargando ${upcoming.length} videos...`, 'info')
+
+      for (const item of upcoming) {
+        const ytId = item.song?.youtubeId || item.youtubeId
+        if (!ytId || downloadingIds.has(ytId)) continue
+
+        const cached = await window.electronAPI.checkVideo(ytId)
+        if (cached) continue
+
+        const title = item.song?.title || item.titulo || ytId
+        downloadingIds.add(ytId)
+        window.electronAPI
+          .downloadVideo({ youtubeId: ytId, title })
+          .then(() => {
+            downloadingIds.delete(ytId)
+            log(`Precargado: ${title}`, 'success')
+            updateVideoCount()
+          })
+          .catch(() => downloadingIds.delete(ytId))
+      }
+    } catch (e) {
+      log(`Error precargando: ${e.message}`, 'error')
+    }
+  }
+
   async function handleCancionActual(data) {
+    currentVideoId = data.youtubeId
+
     log(`► ${data.titulo}`, 'success')
     document.getElementById('song-title').textContent = data.titulo || 'Sin título'
     document.getElementById('song-artist').textContent = data.fuente || '—'
@@ -320,49 +522,37 @@
       return
     }
 
-    // Verificar si ya está descargado
-    const existing = await window.electronAPI.checkVideo(data.youtubeId)
-    if (existing) {
-      statusEl.className = 'cached'
-      statusEl.textContent = '✓ Ya descargado'
-      log(`Cache hit: ${data.youtubeId}`, 'info')
-      await updateVideoCount()
-      return
-    }
-
-    // Descargar
     statusEl.className = 'downloading'
-    statusEl.textContent = '⬇ Descargando...'
-    log(`Descargando: ${data.youtubeId}`, 'warn')
+    statusEl.textContent = '⬇ Verificando...'
 
     try {
-      const result = await window.electronAPI.downloadVideo({
-        youtubeId: data.youtubeId,
-        title: data.titulo
-      })
-      statusEl.className = 'ready'
-      statusEl.textContent = '✓ Listo para reproducir'
-      log(`Descargado: ${result.path}`, 'success')
-
-      const videoPath = result.path.replace(/\\/g, '/')
-      const videoUrl = `file:///${videoPath}`
-      const player = document.getElementById('video-player')
-      player.style.display = 'block'
-      player.src = videoUrl
-      player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
-
+      const filePath = await ensureDownloaded(data.youtubeId, data.titulo)
+      // Si mientras descargaba ya cambió la canción, ignorar
+      if (data.youtubeId !== currentVideoId) {
+        log(`Ignorando descarga obsoleta: ${data.youtubeId}`, 'warn')
+        return
+      }
+      playVideo(filePath)
+      prefetchNext(3)
+      actualizarCola()
       await updateVideoCount()
+      statusEl.className = 'ready'
+      statusEl.textContent = '✓ Reproduciendo'
     } catch (err) {
       statusEl.className = 'error'
-      statusEl.textContent = '✗ Error descargando'
-      log(`Error: ${err.error || err}`, 'error')
+      statusEl.textContent = '✗ Error'
+      log(`Error: ${err.error || err.message || err}`, 'error')
     }
   }
 
   document.getElementById('btn-connect').addEventListener('click', async () => {
-    const api = document.getElementById('input-api').value.trim()
-    const tenant = document.getElementById('input-tenant').value.trim()
-    const token = document.getElementById('input-token').value.trim()
+    _api = document.getElementById('input-api').value.trim()
+    _tenant = document.getElementById('input-tenant').value.trim()
+    _token = document.getElementById('input-token').value.trim()
+
+    const api = _api
+    const tenant = _tenant
+    const token = _token
 
     if (!api || !tenant || !token) {
       log('Faltan campos de configuración', 'error')
@@ -394,16 +584,19 @@
     connection.onreconnecting(() => {
       dot.className = 'connecting'
       log('Reconectando...', 'warn')
+      if (prefetchInterval) clearInterval(prefetchInterval)
     })
 
     connection.onreconnected(() => {
       dot.className = 'connected'
       log('Reconectado', 'success')
+      prefetchInterval = setInterval(() => { prefetchNext(3); actualizarCola() }, 30000)
     })
 
     connection.onclose(() => {
       dot.className = 'error'
       log('Desconectado', 'error')
+      if (prefetchInterval) clearInterval(prefetchInterval)
     })
 
     // Timeout para que no se cuelgue si no hay respuesta
@@ -418,6 +611,8 @@
       clearTimeout(connTimeout)
       dot.className = 'connected'
       log('Conectado al backend', 'success')
+      actualizarCola()
+      prefetchInterval = setInterval(() => { prefetchNext(3); actualizarCola() }, 30000)
     } catch (e) {
       clearTimeout(connTimeout)
       dot.className = 'error'
@@ -431,6 +626,9 @@
     document.getElementById('input-api').value = localStorage.getItem('bar-api') || 'http://192.168.0.3:5251'
     document.getElementById('input-tenant').value = localStorage.getItem('bar-tenant') || ''
     document.getElementById('input-token').value = localStorage.getItem('bar-token') || ''
+
+    document.getElementById('video-player').addEventListener('ended', siguienteCancion)
+
     await updateVideoCount()
     log('App iniciada', 'info')
   })
