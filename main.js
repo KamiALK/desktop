@@ -2,9 +2,131 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const { exec, execFile } = require('child_process')
 const fs = require('fs')
+const http = require('http')
 
 let mainWindow
+let currentVideo = null
+let sseClients = []
 
+// ── SERVIDOR HTTP LOCAL ──
+const HTTP_PORT = 3000
+
+function getLocalIp() {
+  const os = require('os')
+  const ifaces = os.networkInterfaces()
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal)
+        return iface.address
+    }
+  }
+  return '127.0.0.1'
+}
+
+function startHttpServer() {
+  const VIDEOS_DIR = path.join(app.getPath('userData'), 'videos')
+
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://localhost:${HTTP_PORT}`)
+    const ip = getLocalIp()
+
+    if (url.pathname === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(`<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Musicali Bar</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; color:#fff; font-family:Arial,sans-serif; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; }
+video { width:100%; max-height:90vh; background:#000; }
+#info { position:absolute; top:16px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; }
+#title { font-size:1.5rem; font-weight:bold; text-shadow:0 2px 8px rgba(0,0,0,.8); }
+#artist { font-size:1rem; color:#aaa; text-shadow:0 2px 8px rgba(0,0,0,.8); }
+#no-video { color:#555; font-size:1.2rem; }
+</style>
+</head>
+<body>
+<div id="info"><div id="title"></div><div id="artist"></div></div>
+<video id="player" autoplay playsinline controls></video>
+<script>
+const player = document.getElementById('player')
+const title = document.getElementById('title')
+const artist = document.getElementById('artist')
+let evtSource = null
+function conectarSSE() {
+  if (evtSource) evtSource.close()
+  evtSource = new EventSource('/events')
+  evtSource.onmessage = (e) => {
+    const data = JSON.parse(e.data)
+    if (data.videoUrl) {
+      title.textContent = data.titulo || ''
+      artist.textContent = data.artista || ''
+      player.src = data.videoUrl
+      player.style.display = 'block'
+      player.play().catch(() => {})
+    } else {
+      title.textContent = 'Esperando canción...'
+      artist.textContent = ''
+      player.style.display = 'none'
+      player.src = ''
+    }
+  }
+  evtSource.onerror = () => setTimeout(conectarSSE, 3000)
+}
+conectarSSE()
+</script>
+</body>
+</html>`)
+    } else if (url.pathname === '/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      })
+      // Enviar estado actual si hay video
+      if (currentVideo) {
+        res.write(`data: ${JSON.stringify(currentVideo)}\n\n`)
+      }
+      sseClients.push(res)
+      req.on('close', () => {
+        sseClients = sseClients.filter(c => c !== res)
+      })
+    } else if (url.pathname.startsWith('/videos/')) {
+      const filename = path.basename(url.pathname)
+      const filepath = path.join(VIDEOS_DIR, filename)
+      if (!filepath.startsWith(VIDEOS_DIR)) { res.writeHead(403); res.end(); return }
+      if (!fs.existsSync(filepath)) { res.writeHead(404); res.end(); return }
+      const ext = path.extname(filename).toLowerCase()
+      const types = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska' }
+      res.writeHead(200, {
+        'Content-Type': types[ext] || 'application/octet-stream',
+        'Content-Length': fs.statSync(filepath).size,
+        'Accept-Ranges': 'bytes'
+      })
+      fs.createReadStream(filepath).pipe(res)
+    } else {
+      res.writeHead(404); res.end()
+    }
+  })
+  server.listen(HTTP_PORT, '0.0.0.0', () => {
+    broadcastStatus({ url: `http://${ip}:${HTTP_PORT}`, estado: 'listo' })
+  })
+}
+
+function broadcastVideo(info) {
+  currentVideo = info
+  const data = `data: ${JSON.stringify(info)}\n\n`
+  sseClients.forEach(c => c.write(data))
+}
+
+function broadcastStatus(msg) {
+  currentVideo = currentVideo || {}
+  console.log(`[HTTP] Servidor en http://${getLocalIp()}:${HTTP_PORT}`)
+}
+
+// ── VENTANA PRINCIPAL ──
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -21,13 +143,16 @@ function createWindow() {
   mainWindow.loadFile('index.html')
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  startHttpServer()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-// Directorio donde se guardan los videos
+// ── DIRECTORIO DE VIDEOS ──
 const VIDEOS_DIR = path.join(app.getPath('userData'), 'videos')
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true })
 
@@ -44,7 +169,6 @@ ipcMain.handle('download-video', async (event, { youtubeId, title }) => {
     const outputTemplate = path.join(VIDEOS_DIR, `${youtubeId}.%(ext)s`)
     const url = `https://www.youtube.com/watch?v=${youtubeId}`
 
-    // Verificar si ya existe
     const files = fs.readdirSync(VIDEOS_DIR)
     const existing = files.find(f => f.startsWith(youtubeId))
     if (existing) {
@@ -54,7 +178,6 @@ ipcMain.handle('download-video', async (event, { youtubeId, title }) => {
 
     console.log(`[DOWNLOAD] Descargando: ${title} (${youtubeId})`)
 
-    // yt-dlp debe estar instalado en el sistema
     const cmd = `yt-dlp -f "bestvideo[height<=720]+bestaudio/best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`
 
     exec(cmd, (error, stdout, stderr) => {
@@ -86,4 +209,15 @@ ipcMain.handle('list-videos', async () => {
     path: path.join(VIDEOS_DIR, f),
     size: fs.statSync(path.join(VIDEOS_DIR, f)).size
   }))
+})
+
+// ── IPC PARA TRANSMITIR VIDEO A TV ──
+ipcMain.handle('tv-play', async (event, { filePath, titulo, artista }) => {
+  const videoPath = filePath.replace(/\\/g, '/')
+  const videoUrl = `http://${getLocalIp()}:${HTTP_PORT}/videos/${path.basename(videoPath)}`
+  broadcastVideo({ videoUrl, titulo, artista })
+})
+
+ipcMain.handle('tv-stop', async () => {
+  broadcastVideo({})
 })

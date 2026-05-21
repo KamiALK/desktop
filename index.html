@@ -53,6 +53,13 @@
       50% { opacity: 0.3; }
     }
 
+    #tv-url {
+      font-size: 10px;
+      color: #0088ff;
+      letter-spacing: 1px;
+      margin-left: auto;
+    }
+
     #main {
       flex: 1;
       display: grid;
@@ -291,11 +298,6 @@
       text-transform: uppercase;
     }
 
-    #queue-list .q-item.current .q-pos,
-    #queue-list .q-item.current .q-title {
-      color: #00ff88;
-    }
-
     #queue-list::-webkit-scrollbar { width: 3px; }
     #queue-list::-webkit-scrollbar-track { background: transparent; }
     #queue-list::-webkit-scrollbar-thumb { background: #222; }
@@ -314,6 +316,7 @@
 <div id="titlebar">
   <div id="status-dot"></div>
   <span>Musicali Bar — Desktop</span>
+  <span id="tv-url"></span>
 </div>
 
 <div id="main">
@@ -365,6 +368,8 @@
   let _tenant = ''
   let _token = ''
   let currentVideoId = null
+  let currentTitulo = ''
+  let currentArtista = ''
   let prefetchInterval = null
   const downloadingIds = new Set()
 
@@ -425,6 +430,15 @@
     player.style.display = 'block'
     player.src = videoUrl
     player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
+    document.getElementById('song-title').textContent = currentTitulo || ''
+    document.getElementById('song-artist').textContent = currentArtista || ''
+    if (window.electronAPI?.tvPlay) {
+      window.electronAPI.tvPlay({
+        filePath: videoPath,
+        titulo: currentTitulo || '',
+        artista: currentArtista || ''
+      })
+    }
   }
 
   async function siguienteCancion() {
@@ -445,7 +459,6 @@
   }
 
   async function ensureDownloaded(youtubeId, title) {
-    // Si ya se está descargando (prefetch), esperar a que termine
     if (downloadingIds.has(youtubeId)) {
       log(`Esperando descarga en curso: ${youtubeId}`, 'info')
       while (downloadingIds.has(youtubeId)) {
@@ -480,7 +493,6 @@
       if (!res.ok) return
       const queue = await res.json()
 
-      // Saltar la primera (la actual), tomar las siguientes 'count'
       const upcoming = queue.filter((_, i) => i > 0).slice(0, count)
       if (upcoming.length === 0) return
 
@@ -511,6 +523,8 @@
 
   async function handleCancionActual(data) {
     currentVideoId = data.youtubeId
+    currentTitulo = data.titulo || ''
+    currentArtista = data.fuente || ''
 
     log(`► ${data.titulo}`, 'success')
     document.getElementById('song-title').textContent = data.titulo || 'Sin título'
@@ -529,7 +543,6 @@
 
     try {
       const filePath = await ensureDownloaded(data.youtubeId, data.titulo)
-      // Si mientras descargaba ya cambió la canción, ignorar
       if (data.youtubeId !== currentVideoId) {
         log(`Ignorando descarga obsoleta: ${data.youtubeId}`, 'warn')
         return
@@ -561,7 +574,6 @@
       return
     }
 
-    // Guardar config
     localStorage.setItem('bar-api', api)
     localStorage.setItem('bar-tenant', tenant)
     localStorage.setItem('bar-token', token)
@@ -592,6 +604,7 @@
     connection.onreconnected(() => {
       dot.className = 'connected'
       log('Reconectado', 'success')
+      actualizarCola()
       prefetchInterval = setInterval(() => { prefetchNext(3); actualizarCola() }, 30000)
     })
 
@@ -601,7 +614,6 @@
       if (prefetchInterval) clearInterval(prefetchInterval)
     })
 
-    // Timeout para que no se cuelgue si no hay respuesta
     const connTimeout = setTimeout(() => {
       connection.stop()
       dot.className = 'error'
@@ -623,7 +635,6 @@
     }
   })
 
-  // Restaurar config guardada
   window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('input-api').value = localStorage.getItem('bar-api') || 'http://192.168.0.3:5251'
     document.getElementById('input-tenant').value = localStorage.getItem('bar-tenant') || ''
