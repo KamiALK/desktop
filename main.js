@@ -25,10 +25,10 @@ function getLocalIp() {
 
 function startHttpServer() {
   const VIDEOS_DIR = path.join(app.getPath('userData'), 'videos')
+  const ip = getLocalIp()
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://localhost:${HTTP_PORT}`)
-    const ip = getLocalIp()
 
     if (url.pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -43,7 +43,6 @@ video { width:100%; max-height:90vh; background:#000; }
 #info { position:absolute; top:16px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; }
 #title { font-size:1.5rem; font-weight:bold; text-shadow:0 2px 8px rgba(0,0,0,.8); }
 #artist { font-size:1rem; color:#aaa; text-shadow:0 2px 8px rgba(0,0,0,.8); }
-#no-video { color:#555; font-size:1.2rem; }
 </style>
 </head>
 <body>
@@ -53,28 +52,21 @@ video { width:100%; max-height:90vh; background:#000; }
 const player = document.getElementById('player')
 const title = document.getElementById('title')
 const artist = document.getElementById('artist')
-let evtSource = null
-function conectarSSE() {
-  if (evtSource) evtSource.close()
-  evtSource = new EventSource('/events')
-  evtSource.onmessage = (e) => {
-    const data = JSON.parse(e.data)
-    if (data.videoUrl) {
-      title.textContent = data.titulo || ''
-      artist.textContent = data.artista || ''
-      player.src = data.videoUrl
-      player.style.display = 'block'
-      player.play().catch(() => {})
-    } else {
-      title.textContent = 'Esperando canción...'
-      artist.textContent = ''
-      player.style.display = 'none'
-      player.src = ''
-    }
+let evtSource = new EventSource('/events')
+evtSource.onmessage = (e) => {
+  const data = JSON.parse(e.data)
+  if (data.videoUrl) {
+    title.textContent = data.titulo || ''
+    artist.textContent = data.artista || ''
+    player.src = data.videoUrl
+    player.style.display = 'block'
+    player.play().catch(() => {})
+  } else {
+    title.textContent = 'Esperando canción...'
+    artist.textContent = ''
   }
-  evtSource.onerror = () => setTimeout(conectarSSE, 3000)
 }
-conectarSSE()
+evtSource.onerror = () => {}
 </script>
 </body>
 </html>`)
@@ -85,7 +77,6 @@ conectarSSE()
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*'
       })
-      // Enviar estado actual si hay video
       if (currentVideo) {
         res.write(`data: ${JSON.stringify(currentVideo)}\n\n`)
       }
@@ -111,7 +102,7 @@ conectarSSE()
     }
   })
   server.listen(HTTP_PORT, '0.0.0.0', () => {
-    broadcastStatus({ url: `http://${ip}:${HTTP_PORT}`, estado: 'listo' })
+    console.log(`[HTTP] TV en http://${ip}:${HTTP_PORT}`)
   })
 }
 
@@ -119,11 +110,6 @@ function broadcastVideo(info) {
   currentVideo = info
   const data = `data: ${JSON.stringify(info)}\n\n`
   sseClients.forEach(c => c.write(data))
-}
-
-function broadcastStatus(msg) {
-  currentVideo = currentVideo || {}
-  console.log(`[HTTP] Servidor en http://${getLocalIp()}:${HTTP_PORT}`)
 }
 
 // ── VENTANA PRINCIPAL ──
@@ -214,7 +200,8 @@ ipcMain.handle('list-videos', async () => {
 // ── IPC PARA TRANSMITIR VIDEO A TV ──
 ipcMain.handle('tv-play', async (event, { filePath, titulo, artista }) => {
   const videoPath = filePath.replace(/\\/g, '/')
-  const videoUrl = `http://${getLocalIp()}:${HTTP_PORT}/videos/${path.basename(videoPath)}`
+  const ip = getLocalIp()
+  const videoUrl = `http://${ip}:${HTTP_PORT}/videos/${path.basename(videoPath)}`
   broadcastVideo({ videoUrl, titulo, artista })
 })
 
