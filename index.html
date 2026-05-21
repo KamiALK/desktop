@@ -6,309 +6,62 @@
   <title>Musicali Bar</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: #0a0a0a;
-      color: #fff;
-      font-family: 'Courier New', monospace;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #titlebar {
-      height: 32px;
-      background: #111;
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      -webkit-app-region: drag;
-      border-bottom: 1px solid #222;
-      flex-shrink: 0;
-    }
-
-    #titlebar span {
-      font-size: 11px;
-      color: #555;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-
-    #status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #333;
-      margin-right: 8px;
-      transition: background 0.3s;
-    }
-
-    #status-dot.connected { background: #00ff88; }
-    #status-dot.connecting { background: #ffaa00; animation: pulse 1s infinite; }
-    #status-dot.error { background: #ff4444; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    #tv-url {
-      font-size: 10px;
-      color: #0088ff;
-      letter-spacing: 1px;
-      margin-left: auto;
-    }
-
-    #main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 320px;
-      overflow: hidden;
-    }
-
-    #player-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-      position: relative;
-    }
-
-    #now-playing {
-      text-align: center;
-      margin-bottom: 24px;
-    }
-
-    #song-title {
-      font-size: 28px;
-      font-weight: bold;
-      letter-spacing: -0.5px;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-
-    #song-artist {
-      font-size: 14px;
-      color: #555;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    #download-status {
-      margin-top: 16px;
-      padding: 8px 16px;
-      border-radius: 4px;
-      font-size: 12px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      background: #111;
-      border: 1px solid #222;
-      color: #555;
-      min-width: 200px;
-      text-align: center;
-    }
-
-    #download-status.downloading {
-      border-color: #ffaa00;
-      color: #ffaa00;
-    }
-
-    #download-status.ready {
-      border-color: #00ff88;
-      color: #00ff88;
-    }
-
-    #download-status.cached {
-      border-color: #0088ff;
-      color: #0088ff;
-    }
-
-    #download-status.error {
-      border-color: #ff4444;
-      color: #ff4444;
-    }
-
-    #sidebar {
-      background: #0d0d0d;
-      border-left: 1px solid #1a1a1a;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #config-section {
-      padding: 20px;
-      border-bottom: 1px solid #1a1a1a;
-    }
-
-    #config-section h3 {
-      font-size: 10px;
-      color: #333;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-
-    .config-row {
-      margin-bottom: 10px;
-    }
-
-    .config-row label {
-      display: block;
-      font-size: 10px;
-      color: #444;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .config-row input {
-      width: 100%;
-      background: #111;
-      border: 1px solid #222;
-      color: #ccc;
-      padding: 6px 8px;
-      font-size: 11px;
-      font-family: 'Courier New', monospace;
-      border-radius: 2px;
-      outline: none;
-    }
-
-    .config-row input:focus {
-      border-color: #444;
-    }
-
-    #btn-connect {
-      width: 100%;
-      padding: 8px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      color: #ccc;
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      cursor: pointer;
-      border-radius: 2px;
-      margin-top: 8px;
-      transition: all 0.2s;
-    }
-
-    #btn-connect:hover {
-      background: #222;
-      border-color: #555;
-      color: #fff;
-    }
-
-    #log-section {
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-    }
-
-    #log-section h3 {
-      font-size: 10px;
-      color: #333;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-      flex-shrink: 0;
-    }
-
-    #log {
-      flex: 1;
-      overflow-y: auto;
-      font-size: 10px;
-      color: #444;
-      line-height: 1.6;
-    }
-
-    #log .entry {
-      padding: 2px 0;
-      border-bottom: 1px solid #111;
-    }
-
-    #log .entry.info { color: #555; }
-    #log .entry.success { color: #00ff88; }
-    #log .entry.warn { color: #ffaa00; }
-    #log .entry.error { color: #ff4444; }
-
-    #log::-webkit-scrollbar { width: 3px; }
-    #log::-webkit-scrollbar-track { background: transparent; }
-    #log::-webkit-scrollbar-thumb { background: #222; }
-
-    #queue-section {
-      border-top: 1px solid #1a1a1a;
-      padding: 12px 20px;
-      max-height: 200px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #queue-section h3 {
-      font-size: 10px;
-      color: #333;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-      flex-shrink: 0;
-    }
-
-    #queue-list {
-      flex: 1;
-      overflow-y: auto;
-      font-size: 11px;
-    }
-
-    #queue-list .q-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 0;
-      border-bottom: 1px solid #111;
-      color: #555;
-    }
-
-    #queue-list .q-item .q-pos {
-      font-size: 9px;
-      color: #333;
-      min-width: 16px;
-      text-align: right;
-    }
-
-    #queue-list .q-item .q-title {
-      color: #888;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    #queue-list .q-item .q-badge {
-      font-size: 8px;
-      padding: 1px 4px;
-      border-radius: 2px;
-      background: #1a1a1a;
-      color: #555;
-      margin-left: auto;
-      text-transform: uppercase;
-    }
-
-    #queue-list::-webkit-scrollbar { width: 3px; }
-    #queue-list::-webkit-scrollbar-track { background: transparent; }
-    #queue-list::-webkit-scrollbar-thumb { background: #222; }
-
-    #videos-count {
-      padding: 12px 20px;
-      border-top: 1px solid #1a1a1a;
-      font-size: 10px;
-      color: #333;
-      letter-spacing: 1px;
-    }
+    body { background:#0a0a0a; color:#fff; font-family:'Courier New',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+    #titlebar { height:32px; background:#111; display:flex; align-items:center; padding:0 16px; -webkit-app-region:drag; border-bottom:1px solid #222; flex-shrink:0; }
+    #titlebar span { font-size:11px; color:#555; letter-spacing:2px; text-transform:uppercase; }
+    #status-dot { width:6px; height:6px; border-radius:50%; background:#333; margin-right:8px; transition:background .3s; }
+    #status-dot.connected { background:#00ff88; }
+    #status-dot.connecting { background:#ffaa00; animation:pulse 1s infinite; }
+    #status-dot.error { background:#ff4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    #main { flex:1; display:grid; grid-template-columns:1fr 320px; overflow:hidden; }
+    #player-section { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; position:relative; }
+    #now-playing { text-align:center; margin-bottom:24px; }
+    #song-title { font-size:28px; font-weight:bold; letter-spacing:-.5px; color:#fff; margin-bottom:4px; }
+    #song-artist { font-size:14px; color:#555; letter-spacing:1px; text-transform:uppercase; }
+    #download-status { margin-top:16px; padding:8px 16px; border-radius:4px; font-size:12px; letter-spacing:1px; text-transform:uppercase; background:#111; border:1px solid #222; color:#555; min-width:200px; text-align:center; }
+    #download-status.downloading { border-color:#ffaa00; color:#ffaa00; }
+    #download-status.ready { border-color:#00ff88; color:#00ff88; }
+    #download-status.cached { border-color:#0088ff; color:#0088ff; }
+    #download-status.error { border-color:#ff4444; color:#ff4444; }
+    #sidebar { background:#0d0d0d; border-left:1px solid #1a1a1a; display:flex; flex-direction:column; overflow:hidden; }
+    #config-section { padding:20px; border-bottom:1px solid #1a1a1a; }
+    #config-section h3 { font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
+    .config-row { margin-bottom:10px; }
+    .config-row label { display:block; font-size:10px; color:#444; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
+    .config-row input { width:100%; background:#111; border:1px solid #222; color:#ccc; padding:6px 8px; font-size:11px; font-family:'Courier New',monospace; border-radius:2px; outline:none; }
+    .config-row input:focus { border-color:#444; }
+    #btn-connect, #btn-cast { width:100%; padding:8px; border:1px solid #333; color:#ccc; font-family:'Courier New',monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; border-radius:2px; margin-top:8px; transition:all .2s; }
+    #btn-connect { background:#1a1a1a; }
+    #btn-connect:hover { background:#222; border-color:#555; color:#fff; }
+    #btn-cast { background:#2a2a1a; border-color:#555; }
+    #btn-cast:hover { background:#3a3a2a; border-color:#888; }
+    #cast-list { margin-top:6px; display:flex; flex-direction:column; gap:4px; }
+    #cast-list .cc-item { padding:4px 8px; font-size:10px; background:#1a1a1a; border:1px solid #333; border-radius:2px; cursor:pointer; color:#888; }
+    #cast-list .cc-item:hover { background:#222; color:#fff; }
+    #cast-list .cc-item.cc-active { border-color:#00ff88; color:#00ff88; }
+    #log-section { flex:1; overflow:hidden; display:flex; flex-direction:column; padding:20px; }
+    #log-section h3 { font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; flex-shrink:0; }
+    #log { flex:1; overflow-y:auto; font-size:10px; color:#444; line-height:1.6; }
+    #log .entry { padding:2px 0; border-bottom:1px solid #111; }
+    #log .entry.info { color:#555; }
+    #log .entry.success { color:#00ff88; }
+    #log .entry.warn { color:#ffaa00; }
+    #log .entry.error { color:#ff4444; }
+    #log::-webkit-scrollbar { width:3px; }
+    #log::-webkit-scrollbar-track { background:transparent; }
+    #log::-webkit-scrollbar-thumb { background:#222; }
+    #queue-section { border-top:1px solid #1a1a1a; padding:12px 20px; max-height:200px; display:flex; flex-direction:column; overflow:hidden; }
+    #queue-section h3 { font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; flex-shrink:0; }
+    #queue-list { flex:1; overflow-y:auto; font-size:11px; }
+    #queue-list .q-item { display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid #111; color:#555; }
+    #queue-list .q-item .q-pos { font-size:9px; color:#333; min-width:16px; text-align:right; }
+    #queue-list .q-item .q-title { color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #queue-list .q-item .q-badge { font-size:8px; padding:1px 4px; border-radius:2px; background:#1a1a1a; color:#555; margin-left:auto; text-transform:uppercase; }
+    #queue-list::-webkit-scrollbar { width:3px; }
+    #queue-list::-webkit-scrollbar-track { background:transparent; }
+    #queue-list::-webkit-scrollbar-thumb { background:#222; }
+    #videos-count { padding:12px 20px; border-top:1px solid #1a1a1a; font-size:10px; color:#333; letter-spacing:1px; }
   </style>
 </head>
 <body>
@@ -316,7 +69,6 @@
 <div id="titlebar">
   <div id="status-dot"></div>
   <span>Musicali Bar — Desktop</span>
-  <span id="tv-url"></span>
 </div>
 
 <div id="main">
@@ -334,7 +86,7 @@
       <h3>Configuración</h3>
       <div class="config-row">
         <label>API URL</label>
-        <input id="input-api" type="text" value="http://192.168.0.3:5251" placeholder="http://...">
+        <input id="input-api" type="text" value="http://192.168.0.3:5251">
       </div>
       <div class="config-row">
         <label>Tenant ID</label>
@@ -345,6 +97,8 @@
         <input id="input-token" type="password" placeholder="Bearer token...">
       </div>
       <button id="btn-connect">Conectar</button>
+      <button id="btn-cast">📺 Buscar Chromecast</button>
+      <div id="cast-list"></div>
     </div>
 
     <div id="log-section">
@@ -393,51 +147,33 @@
   async function actualizarCola() {
     if (!_api || !_tenant || !_token) return
     try {
-      const res = await fetch(`${_api}/api/PlayQueue`, {
-        headers: {
-          'Authorization': `Bearer ${_token}`,
-          'X-Tenant-Id': _tenant
-        }
-      })
+      const res = await fetch(`${_api}/api/PlayQueue`, { headers: { 'Authorization':`Bearer ${_token}`, 'X-Tenant-Id':_tenant }})
       if (!res.ok) return
       const queue = await res.json()
       const waiting = queue.filter(i => i.status === 'waiting')
       const list = document.getElementById('queue-list')
       list.innerHTML = waiting.length === 0
         ? '<div style="color:#333;font-size:10px;padding:4px 0">Sin próximas</div>'
-        : waiting.map((item, i) => {
+        : waiting.map((item,i) => {
             const title = item.song?.title || 'Sin título'
             const source = item.requestId ? 'pedida' : item.isTransition ? 'transición' : 'auto'
-            return `<div class="q-item">
-              <span class="q-pos">${i + 1}</span>
-              <span class="q-title">${escHtml(title)}</span>
-              <span class="q-badge">${source}</span>
-            </div>`
+            return `<div class="q-item"><span class="q-pos">${i+1}</span><span class="q-title">${escHtml(title)}</span><span class="q-badge">${source}</span></div>`
           }).join('')
     } catch {}
   }
 
-  function escHtml(s) {
-    const d = document.createElement('div')
-    d.textContent = s
-    return d.innerHTML
-  }
+  function escHtml(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
   function playVideo(filePath) {
     const videoPath = filePath.replace(/\\/g, '/')
-    const videoUrl = `file:///${videoPath}`
     const player = document.getElementById('video-player')
     player.style.display = 'block'
-    player.src = videoUrl
+    player.src = `file:///${videoPath}`
     player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
-    document.getElementById('song-title').textContent = currentTitulo || ''
-    document.getElementById('song-artist').textContent = currentArtista || ''
+    document.getElementById('song-title').textContent = currentTitulo
+    document.getElementById('song-artist').textContent = currentArtista
     if (window.electronAPI?.tvPlay) {
-      window.electronAPI.tvPlay({
-        filePath: videoPath,
-        titulo: currentTitulo || '',
-        artista: currentArtista || ''
-      })
+      window.electronAPI.tvPlay({ filePath: videoPath, titulo: currentTitulo, artista: currentArtista })
     }
   }
 
@@ -445,203 +181,119 @@
     if (!_api || !_tenant || !_token) return
     log('Canción terminada, avanzando...', 'info')
     try {
-      const res = await fetch(`${_api}/api/PlayQueue/next`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${_token}`,
-          'X-Tenant-Id': _tenant
-        }
-      })
+      const res = await fetch(`${_api}/api/PlayQueue/next`, { method:'POST', headers: { 'Authorization':`Bearer ${_token}`, 'X-Tenant-Id':_tenant }})
       if (!res.ok) log('No hay siguiente canción', 'warn')
-    } catch (e) {
-      log(`Error avanzando: ${e.message}`, 'error')
-    }
+    } catch(e) { log(`Error avanzando: ${e.message}`, 'error') }
   }
 
   async function ensureDownloaded(youtubeId, title) {
     if (downloadingIds.has(youtubeId)) {
       log(`Esperando descarga en curso: ${youtubeId}`, 'info')
-      while (downloadingIds.has(youtubeId)) {
-        await new Promise(r => setTimeout(r, 500))
-      }
+      while (downloadingIds.has(youtubeId)) { await new Promise(r => setTimeout(r, 500)) }
       const cached = await window.electronAPI.checkVideo(youtubeId)
       if (cached) return cached
     }
-
     const existing = await window.electronAPI.checkVideo(youtubeId)
     if (existing) return existing
-
     downloadingIds.add(youtubeId)
-    try {
-      const result = await window.electronAPI.downloadVideo({ youtubeId, title })
-      return result.path
-    } finally {
-      downloadingIds.delete(youtubeId)
-    }
+    try { const r = await window.electronAPI.downloadVideo({ youtubeId, title }); return r.path }
+    finally { downloadingIds.delete(youtubeId) }
   }
 
   async function prefetchNext(count = 3) {
     if (!_api || !_tenant || !_token) return
-
     try {
-      const res = await fetch(`${_api}/api/PlayQueue`, {
-        headers: {
-          'Authorization': `Bearer ${_token}`,
-          'X-Tenant-Id': _tenant
-        }
-      })
+      const res = await fetch(`${_api}/api/PlayQueue`, { headers: { 'Authorization':`Bearer ${_token}`, 'X-Tenant-Id':_tenant }})
       if (!res.ok) return
       const queue = await res.json()
-
-      const upcoming = queue.filter((_, i) => i > 0).slice(0, count)
+      const upcoming = queue.filter((_,i) => i > 0).slice(0, count)
       if (upcoming.length === 0) return
-
       log(`Precargando ${upcoming.length} videos...`, 'info')
-
       for (const item of upcoming) {
         const ytId = item.song?.youtubeId || item.youtubeId
         if (!ytId || downloadingIds.has(ytId)) continue
-
         const cached = await window.electronAPI.checkVideo(ytId)
         if (cached) continue
-
         const title = item.song?.title || item.titulo || ytId
         downloadingIds.add(ytId)
-        window.electronAPI
-          .downloadVideo({ youtubeId: ytId, title })
-          .then(() => {
-            downloadingIds.delete(ytId)
-            log(`Precargado: ${title}`, 'success')
-            updateVideoCount()
-          })
-          .catch(() => downloadingIds.delete(ytId))
+        window.electronAPI.downloadVideo({ youtubeId: ytId, title }).then(() => { downloadingIds.delete(ytId); log(`Precargado: ${title}`,'success'); updateVideoCount() }).catch(() => downloadingIds.delete(ytId))
       }
-    } catch (e) {
-      log(`Error precargando: ${e.message}`, 'error')
-    }
+    } catch(e) { log(`Error precargando: ${e.message}`, 'error') }
   }
 
   async function handleCancionActual(data) {
     currentVideoId = data.youtubeId
     currentTitulo = data.titulo || ''
     currentArtista = data.fuente || ''
-
     log(`► ${data.titulo}`, 'success')
     document.getElementById('song-title').textContent = data.titulo || 'Sin título'
     document.getElementById('song-artist').textContent = data.fuente || '—'
-
     const statusEl = document.getElementById('download-status')
-
-    if (!data.youtubeId) {
-      statusEl.className = 'error'
-      statusEl.textContent = 'Sin YouTube ID'
-      return
-    }
-
-    statusEl.className = 'downloading'
-    statusEl.textContent = '⬇ Verificando...'
-
+    if (!data.youtubeId) { statusEl.className='error'; statusEl.textContent='Sin YouTube ID'; return }
+    statusEl.className='downloading'; statusEl.textContent='⬇ Verificando...'
     try {
       const filePath = await ensureDownloaded(data.youtubeId, data.titulo)
-      if (data.youtubeId !== currentVideoId) {
-        log(`Ignorando descarga obsoleta: ${data.youtubeId}`, 'warn')
-        return
-      }
+      if (data.youtubeId !== currentVideoId) { log(`Ignorando descarga obsoleta: ${data.youtubeId}`,'warn'); return }
       playVideo(filePath)
-      prefetchNext(3)
-      actualizarCola()
-      await updateVideoCount()
-      statusEl.className = 'ready'
-      statusEl.textContent = '✓ Reproduciendo'
-    } catch (err) {
-      statusEl.className = 'error'
-      statusEl.textContent = '✗ Error'
-      log(`Error: ${err.error || err.message || err}`, 'error')
-    }
+      prefetchNext(3); actualizarCola(); await updateVideoCount()
+      statusEl.className='ready'; statusEl.textContent='✓ Reproduciendo'
+    } catch(err) { statusEl.className='error'; statusEl.textContent='✗ Error'; log(`Error: ${err.error||err.message||err}`,'error') }
   }
+
+  // ── CAST ──
+  document.getElementById('btn-cast').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-cast')
+    btn.textContent = '🔍 Buscando...'
+    btn.disabled = true
+    const devices = await window.electronAPI.castScan()
+    const list = document.getElementById('cast-list')
+    if (devices.length === 0) {
+      list.innerHTML = '<div style="color:#555;font-size:10px;padding:4px 0">Ningún Chromecast encontrado</div>'
+    } else {
+      list.innerHTML = devices.map(d => `<div class="cc-item" data-id="${d.id}">📺 ${escHtml(d.name)}</div>`).join('')
+      list.querySelectorAll('.cc-item').forEach(el => {
+        el.addEventListener('click', async () => {
+          el.textContent = '⏳ Transmitiendo...'
+          const r = await window.electronAPI.castPlay(el.dataset.id)
+          if (r.success) { el.className = 'cc-item cc-active'; el.textContent = `📺 ${escHtml(r.name||'Transmitiendo')}`; log(`Cast: transmitiendo a ${r.name}`,'success') }
+          else { el.textContent = `❌ ${r.error}`; log(`Cast: ${r.error}`,'error') }
+        })
+      })
+    }
+    btn.textContent = '📺 Buscar Chromecast'
+    btn.disabled = false
+    log(`Cast: ${devices.length} dispositivo(s) encontrado(s)`,'info')
+  })
 
   document.getElementById('btn-connect').addEventListener('click', async () => {
     _api = document.getElementById('input-api').value.trim()
     _tenant = document.getElementById('input-tenant').value.trim()
     _token = document.getElementById('input-token').value.trim()
-
-    const api = _api
-    const tenant = _tenant
-    const token = _token
-
-    if (!api || !tenant || !token) {
-      log('Faltan campos de configuración', 'error')
-      return
-    }
-
-    localStorage.setItem('bar-api', api)
-    localStorage.setItem('bar-tenant', tenant)
-    localStorage.setItem('bar-token', token)
-
-    if (connection) {
-      await connection.stop()
-    }
-
-    dot.className = 'connecting'
-    log('Conectando a SignalR...', 'warn')
-
-    connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${api}/hubs/bar`, {
-        accessTokenFactory: () => token
-      })
-      .withAutomaticReconnect()
-      .build()
-
+    const api=_api, tenant=_tenant, token=_token
+    if (!api || !tenant || !token) { log('Faltan campos de configuración','error'); return }
+    localStorage.setItem('bar-api',api); localStorage.setItem('bar-tenant',tenant); localStorage.setItem('bar-token',token)
+    if (connection) await connection.stop()
+    dot.className='connecting'; log('Conectando a SignalR...','warn')
+    connection = new signalR.HubConnectionBuilder().withUrl(`${api}/hubs/bar`,{accessTokenFactory:()=>token}).withAutomaticReconnect().build()
     connection.on('CancionActual', handleCancionActual)
-    connection.on('CancionActual', (data) => console.log('MSG', data))
-
-    connection.onreconnecting(() => {
-      dot.className = 'connecting'
-      log('Reconectando...', 'warn')
-      if (prefetchInterval) clearInterval(prefetchInterval)
-    })
-
-    connection.onreconnected(() => {
-      dot.className = 'connected'
-      log('Reconectado', 'success')
-      actualizarCola()
-      prefetchInterval = setInterval(() => { prefetchNext(3); actualizarCola() }, 30000)
-    })
-
-    connection.onclose(() => {
-      dot.className = 'error'
-      log('Desconectado', 'error')
-      if (prefetchInterval) clearInterval(prefetchInterval)
-    })
-
-    const connTimeout = setTimeout(() => {
-      connection.stop()
-      dot.className = 'error'
-      log('Timeout: el backend no respondió', 'error')
-    }, 10000)
-
+    connection.on('CancionActual', (d) => console.log('MSG',d))
+    connection.onreconnecting(() => { dot.className='connecting'; log('Reconectando...','warn'); if(prefetchInterval) clearInterval(prefetchInterval) })
+    connection.onreconnected(() => { dot.className='connected'; log('Reconectado','success'); actualizarCola(); prefetchInterval=setInterval(()=>{prefetchNext(3);actualizarCola()},30000) })
+    connection.onclose(() => { dot.className='error'; log('Desconectado','error'); if(prefetchInterval) clearInterval(prefetchInterval) })
+    const connTimeout = setTimeout(() => { connection.stop(); dot.className='error'; log('Timeout: el backend no respondió','error') }, 10000)
     try {
-      await connection.start()
-      clearTimeout(connTimeout)
-      dot.className = 'connected'
-      log('Conectado al backend', 'success')
+      await connection.start(); clearTimeout(connTimeout)
+      dot.className='connected'; log('Conectado al backend','success')
       actualizarCola()
       prefetchInterval = setInterval(() => { prefetchNext(3); actualizarCola() }, 30000)
-    } catch (e) {
-      clearTimeout(connTimeout)
-      dot.className = 'error'
-      log(`Error: ${e?.message || 'desconocido'}`, 'error')
-      console.error('SignalR error:', e)
-    }
+    } catch(e) { clearTimeout(connTimeout); dot.className='error'; log(`Error: ${e?.message||'desconocido'}`,'error') }
   })
 
   window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('input-api').value = localStorage.getItem('bar-api') || 'http://192.168.0.3:5251'
     document.getElementById('input-tenant').value = localStorage.getItem('bar-tenant') || ''
     document.getElementById('input-token').value = localStorage.getItem('bar-token') || ''
-
     document.getElementById('video-player').addEventListener('ended', siguienteCancion)
-
     await updateVideoCount()
     log('App iniciada', 'info')
   })

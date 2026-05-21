@@ -142,51 +142,34 @@ app.on('window-all-closed', () => {
 const VIDEOS_DIR = path.join(app.getPath('userData'), 'videos')
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true })
 
-// Verificar si un video ya está descargado
 ipcMain.handle('check-video', async (event, youtubeId) => {
   const files = fs.readdirSync(VIDEOS_DIR)
   const found = files.find(f => f.startsWith(youtubeId))
   return found ? path.join(VIDEOS_DIR, found) : null
 })
 
-// Descargar video con yt-dlp
 ipcMain.handle('download-video', async (event, { youtubeId, title }) => {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(VIDEOS_DIR, `${youtubeId}.%(ext)s`)
     const url = `https://www.youtube.com/watch?v=${youtubeId}`
-
     const files = fs.readdirSync(VIDEOS_DIR)
     const existing = files.find(f => f.startsWith(youtubeId))
     if (existing) {
       resolve({ success: true, path: path.join(VIDEOS_DIR, existing), cached: true })
       return
     }
-
     console.log(`[DOWNLOAD] Descargando: ${title} (${youtubeId})`)
-
     const cmd = `yt-dlp -f "bestvideo[height<=720]+bestaudio/best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${url}"`
-
     exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`[DOWNLOAD] Error: ${error.message}`)
-        reject({ success: false, error: error.message })
-        return
-      }
-
+      if (error) { reject({ success: false, error: error.message }); return }
       const files2 = fs.readdirSync(VIDEOS_DIR)
       const downloaded = files2.find(f => f.startsWith(youtubeId))
-      if (downloaded) {
-        const filePath = path.join(VIDEOS_DIR, downloaded)
-        console.log(`[DOWNLOAD] Completado: ${filePath}`)
-        resolve({ success: true, path: filePath, cached: false })
-      } else {
-        reject({ success: false, error: 'Archivo no encontrado tras descarga' })
-      }
+      if (downloaded) resolve({ success: true, path: path.join(VIDEOS_DIR, downloaded), cached: false })
+      else reject({ success: false, error: 'Archivo no encontrado tras descarga' })
     })
   })
 })
 
-// Obtener lista de videos descargados
 ipcMain.handle('list-videos', async () => {
   const files = fs.readdirSync(VIDEOS_DIR)
   return files.map(f => ({
@@ -197,7 +180,7 @@ ipcMain.handle('list-videos', async () => {
   }))
 })
 
-// ── IPC PARA TRANSMITIR VIDEO A TV ──
+// ── IPC: TV HTTP ──
 ipcMain.handle('tv-play', async (event, { filePath, titulo, artista }) => {
   const videoPath = filePath.replace(/\\/g, '/')
   const ip = getLocalIp()
@@ -205,6 +188,49 @@ ipcMain.handle('tv-play', async (event, { filePath, titulo, artista }) => {
   broadcastVideo({ videoUrl, titulo, artista })
 })
 
-ipcMain.handle('tv-stop', async () => {
-  broadcastVideo({})
+ipcMain.handle('tv-stop', async () => { broadcastVideo({}) })
+
+// ── IPC: CHROMECAST ──
+let castBrowser = null
+const castDevices = []
+
+ipcMain.handle('cast-scan', async () => {
+  castDevices.length = 0
+  const ChromecastAPI = require('chromecast-api')
+  if (!castBrowser) {
+    castBrowser = new ChromecastAPI()
+    castBrowser.on('device', (device) => {
+      const dev = {
+        name: device.friendlyName || device.name || 'Chromecast',
+        id: device.id || device.name || `cc_${castDevices.length}`
+      }
+      if (!castDevices.find(d => d.id === dev.id)) {
+        castDevices.push(dev)
+      }
+    })
+  }
+  castBrowser.update()
+  await new Promise(r => setTimeout(r, 4000))
+  return castDevices
+})
+
+ipcMain.handle('cast-play', async (event, deviceId) => {
+  const dev = castDevices.find(d => d.id === deviceId)
+  if (!dev) return { error: 'Dispositivo no encontrado' }
+  if (!currentVideo?.videoUrl) return { error: 'No hay video reproduciendose' }
+
+  const ChromecastAPI = require('chromecast-api')
+  const browser = new ChromecastAPI()
+  return new Promise((resolve) => {
+    browser.on('device', (device) => {
+      if (device.friendlyName === dev.name || device.name === dev.name) {
+        device.play(currentVideo.videoUrl, { title: currentVideo.titulo || 'Musicali Bar' }, (err) => {
+          if (err) resolve({ error: err.message })
+          else resolve({ success: true, name: dev.name })
+        })
+      }
+    })
+    browser.update()
+    setTimeout(() => resolve({ error: 'No se encontró el Chromecast' }), 15000)
+  })
 })
