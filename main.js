@@ -234,3 +234,64 @@ ipcMain.handle('cast-play', async (event, deviceId) => {
     setTimeout(() => resolve({ error: 'No se encontró el Chromecast' }), 15000)
   })
 })
+
+// ── UTIL: HTTP REQUEST ──
+function httpRequest(url, options, body = null) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const mod = parsed.protocol === 'https:' ? require('https') : require('http')
+    const opts = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: options.method || 'GET',
+      headers: { ...options.headers },
+      timeout: 10000
+    }
+
+    const req = mod.request(opts, (res) => {
+      let data = ''
+      res.on('data', chunk => data += chunk)
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data)
+          if (res.statusCode >= 200 && res.statusCode < 300) resolve(json)
+          else reject({ status: res.statusCode, message: json.title || `Error ${res.statusCode}` })
+        } catch {
+          reject({ status: res.statusCode, message: 'Respuesta inválida del servidor' })
+        }
+      })
+    })
+
+    req.on('error', (err) => reject({ status: 0, message: err.message }))
+    req.on('timeout', () => { req.destroy(); reject({ status: 0, message: 'Timeout' }) })
+
+    if (body) req.write(body)
+    req.end()
+  })
+}
+
+// ── IPC: AUTH LOGIN ──
+ipcMain.handle('auth-login', async (event, { apiUrl, username, password }) => {
+  const baseUrl = apiUrl.replace(/\/+$/, '')
+  const body = JSON.stringify({ username, password })
+  return httpRequest(`${baseUrl}/api/Auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body)
+    }
+  }, body)
+})
+
+// ── IPC: GENERATE BAR TOKEN ──
+ipcMain.handle('generate-bar-token', async (event, { apiUrl, tenantId, adminToken }) => {
+  const baseUrl = apiUrl.replace(/\/+$/, '')
+  return httpRequest(`${baseUrl}/api/auth/bar/token`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${adminToken}`,
+      'X-Tenant-Id': tenantId
+    }
+  })
+})
