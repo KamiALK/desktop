@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://192.168.0.3:5251 http://192.168.0.3:5251 ws://* http://* https://*">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' blob: file:; connect-src 'self' ws://192.168.0.3:5251 http://192.168.0.3:5251 ws://* http://* https://*">
   <title>Musicali Bar</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -39,7 +39,10 @@
     #app-screen { flex:1; display:flex; flex-direction:column; overflow:hidden; }
     #app-screen.hidden { display:none; }
 
-    #titlebar { height:32px; background:#111; display:flex; align-items:center; padding:0 16px; -webkit-app-region:drag; border-bottom:1px solid #222; flex-shrink:0; }
+    #titlebar { height:32px; background:#111; display:flex; align-items:center; padding:0 16px; -webkit-app-region:drag; border-bottom:1px solid #222; flex-shrink:0; transition: border-color 0.5s, background 0.5s; }
+	    #titlebar.source-queue { border-bottom-color: #27ae60; background: #112211; }
+	    #titlebar.source-graph { border-bottom-color: #3498db; background: #111a22; }
+	    #titlebar.source-transition { border-bottom-color: #e67e22; background: #221a11; }
     #titlebar span { font-size:11px; color:#555; letter-spacing:2px; text-transform:uppercase; }
     #titlebar-right { margin-left:auto; display:flex; align-items:center; gap:12px; -webkit-app-region:no-drag; }
     #logged-as { font-size:9px; color:#333; letter-spacing:1px; }
@@ -48,6 +51,8 @@
       background:none; border:none; cursor:pointer; font-family:'Courier New',monospace; padding:0;
     }
     #btn-logout:hover { color:#ff4444; }
+    #btn-toggle-sidebar { font-size:14px; color:#555; background:none; border:none; cursor:pointer; font-family:"Courier New",monospace; padding:0 8px; }
+    #btn-toggle-sidebar:hover { color:#fff; }
     #status-dot { width:6px; height:6px; border-radius:50%; background:#333; margin-right:8px; transition:background .3s; }
     #status-dot.connected { background:#00ff88; }
     #status-dot.connecting { background:#ffaa00; animation:pulse 1s infinite; }
@@ -55,7 +60,14 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
     #main { flex:1; display:grid; grid-template-columns:1fr 320px; overflow:hidden; }
-    #player-section { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; position:relative; }
+    #player-section { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; position:relative; overflow:hidden; }
+	    #bg-video {
+	      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+	      min-width:100%; min-height:100%; width:auto; height:auto;
+	      object-fit:cover; opacity:0; pointer-events:none; z-index:0;
+	      display:none;
+	    }
+	    #bg-video.activo { display:block; opacity:1; }
     #now-playing { text-align:center; margin-bottom:24px; }
     #song-title { font-size:28px; font-weight:bold; letter-spacing:-.5px; color:#fff; margin-bottom:4px; }
     #song-artist { font-size:14px; color:#555; letter-spacing:1px; text-transform:uppercase; }
@@ -102,6 +114,14 @@
     #queue-list::-webkit-scrollbar-track { background:transparent; }
     #queue-list::-webkit-scrollbar-thumb { background:#222; }
     #videos-count { padding:12px 20px; border-top:1px solid #1a1a1a; font-size:10px; color:#333; letter-spacing:1px; }
+
+    #fondo-section { padding:12px 20px; border-bottom:1px solid #1a1a1a; display:flex; flex-direction:column; gap:6px; }
+    #fondo-section h3 { font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; }
+    
+    
+    #btn-importar-fondo, #btn-pantalla-completa { padding:6px; background:#1a1a1a; border:1px solid #333; color:#ccc; font-family:'Courier New',monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; border-radius:2px; }
+    #btn-importar-fondo:hover, #btn-pantalla-completa:hover { background:#222; border-color:#555; color:#fff; }
+    #fondo-status { font-size:10px; color:#666; min-height:14px; }
   </style>
 </head>
 <body>
@@ -136,12 +156,14 @@
     <span>Musicali Bar — Desktop</span>
     <div id="titlebar-right">
       <span id="logged-as"></span>
+      <button id="btn-toggle-sidebar">☰</button>
       <button id="btn-logout">Salir</button>
     </div>
   </div>
 
   <div id="main">
     <div id="player-section">
+      <video id="bg-video" muted loop playsinline></video>
       <div id="now-playing">
         <div id="song-title">Sin canción</div>
         <div id="song-artist">—</div>
@@ -157,6 +179,14 @@
         <button id="btn-reconnect">⟳ Reconectar</button>
         <button id="btn-cast">📺 Buscar Chromecast</button>
         <div id="cast-list"></div>
+      </div>
+
+      <div id="fondo-section">
+        <h3>🖼 Fondo</h3>
+        <input id="fondo-file" type="file" accept="video/*" hidden />
+        <button id="btn-seleccionar-fondo">📁 Elegir video</button>
+        <button id="btn-pantalla-completa">⛶ Pantalla completa</button>
+        <div id="fondo-status"></div>
       </div>
 
       <div id="log-section">
@@ -307,6 +337,21 @@
       .withAutomaticReconnect()
       .build()
 
+        connection.on('FondoActivo', (data) => {
+      const bg = document.getElementById('bg-video')
+      const player = document.getElementById('video-player')
+      if (data.activo) {
+        bg.classList.add('activo')
+        bg.play().catch(e => log("Error play fondo: " + e.message, "error"))
+        player.style.opacity = '0'
+        log('Fondo activado', 'success')
+      } else {
+        bg.classList.remove('activo')
+        bg.pause()
+        player.style.opacity = '1'
+        log('Fondo desactivado', 'warn')
+      }
+    })
     connection.on('CancionActual', handleCancionActual)
     connection.onreconnecting(() => {
       dot.className = 'connecting'
@@ -445,7 +490,8 @@
     currentVideoId = data.youtubeId
     currentTitulo  = data.titulo  || ''
     currentArtista = data.fuente  || ''
-    log(`► ${data.titulo}`, 'success')
+    document.getElementById('titlebar').className = 'source-' + (data.fuente || 'queue')
+    log(`► ${data.titulo} [${data.fuente || '?'}]`, 'success')
     document.getElementById('song-title').textContent  = data.titulo || 'Sin título'
     document.getElementById('song-artist').textContent = data.fuente || '—'
     const statusEl = document.getElementById('download-status')
@@ -455,8 +501,17 @@
       const filePath = await ensureDownloaded(data.youtubeId, data.titulo)
       if (data.youtubeId !== currentVideoId) { log(`Ignorando descarga obsoleta: ${data.youtubeId}`, 'warn'); return }
       playVideo(filePath)
-      prefetchNext(3); actualizarCola(); await updateVideoCount()
+      actualizarCola(); await updateVideoCount()
       statusEl.className = 'ready'; statusEl.textContent = '✓ Reproduciendo'
+
+      // ── PREFETCH: siguiente en cola + próximos ──
+      if (data.nextYoutubeId) {
+        log(`Precargando siguiente: ${data.nextTitulo || data.nextYoutubeId}`, 'info')
+        ensureDownloaded(data.nextYoutubeId, data.nextTitulo)
+          .then(path => log(`✓ Siguiente precargado: ${data.nextTitulo}`, 'success'))
+          .catch(err => log(`✗ Error precargando: ${err.error || err.message || err}`, 'error'))
+      }
+      prefetchNext(3)
     } catch(err) {
       statusEl.className = 'error'; statusEl.textContent = '✗ Error'
       log(`Error: ${err.error || err.message || err}`, 'error')
@@ -488,6 +543,119 @@
     log(`Cast: ${devices.length} dispositivo(s) encontrado(s)`, 'info')
   })
 
+  // ── FONDO ──
+  document.getElementById('btn-seleccionar-fondo').addEventListener('click', () => {
+    document.getElementById('fondo-file').click()
+  })
+
+  document.getElementById('fondo-file').addEventListener('change', (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    const bg = document.getElementById('bg-video')
+    bg.src = url
+    bg.classList.add('activo')
+    bg.play().catch(e => log("Error play fondo: " + e.message, "error"))
+    document.getElementById('fondo-status').textContent = `✓ ${file.name}`
+    log(`Fondo cargado: ${file.name}`, 'success')
+  })
+
+  document.getElementById('btn-pantalla-completa').addEventListener('click', () => {
+    const main = document.getElementById('main')
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+      document.getElementById('sidebar').style.display = 'none'
+      main.style.gridTemplateColumns = '1fr'
+    } else {
+      document.exitFullscreen().catch(() => {})
+      document.getElementById('sidebar').style.display = ''
+      main.style.gridTemplateColumns = ''
+    }
+  })
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      document.getElementById('sidebar').style.display = ''
+      document.getElementById('main').style.gridTemplateColumns = ''
+    }
+  })
+
+  // ── FONDO ──
+  document.getElementById("btn-seleccionar-fondo").addEventListener("click", () => {
+    document.getElementById("fondo-file").click()
+  })
+
+  document.getElementById("fondo-file").addEventListener("change", (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    const bg = document.getElementById("bg-video")
+    bg.src = url
+    bg.classList.add("activo")
+    bg.play().catch(e => log("Error play fondo: " + e.message, "error"))
+    document.getElementById("fondo-status").textContent = "✓ " + file.name
+    log("Fondo cargado: " + file.name, "success")
+  })
+
+  document.getElementById("btn-pantalla-completa").addEventListener("click", () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+    } else {
+      document.exitFullscreen().catch(() => {})
+    }
+  })
+
+  // ── FONDO ──
+  document.getElementById('btn-seleccionar-fondo').addEventListener('click', () => {
+    document.getElementById('fondo-file').click()
+  })
+
+  document.getElementById('fondo-file').addEventListener('change', (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    const bg = document.getElementById('bg-video')
+    bg.src = url
+    bg.classList.add('activo')
+    bg.play().catch(e => log("Error play fondo: " + e.message, "error"))
+    document.getElementById('fondo-status').textContent = '✓ ' + file.name
+    log('Fondo cargado: ' + file.name, 'success')
+  })
+
+  document.getElementById('btn-pantalla-completa').addEventListener('click', () => {
+    const main = document.getElementById('main')
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+      document.getElementById('sidebar').style.display = 'none'
+      main.style.gridTemplateColumns = '1fr'
+    } else {
+      document.exitFullscreen().catch(() => {})
+      document.getElementById('sidebar').style.display = ''
+      main.style.gridTemplateColumns = ''
+    }
+  })
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      document.getElementById('sidebar').style.display = ''
+      document.getElementById('main').style.gridTemplateColumns = ''
+    }
+  })
+
+  // ── SIDEBAR TOGGLE ──
+  let sidebarVisible = true
+  document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar')
+    const main = document.getElementById('main')
+    sidebarVisible = !sidebarVisible
+    document.getElementById("btn-toggle-sidebar").textContent = sidebarVisible ? "☰" : "☷"
+    if (sidebarVisible) {
+      sidebar.style.display = ''
+      main.style.gridTemplateColumns = ''
+    } else {
+      sidebar.style.display = 'none'
+      main.style.gridTemplateColumns = '1fr'
+    }
+  })
+
   // ── INIT ──
   window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('video-player').addEventListener('ended', siguienteCancion)
@@ -513,3 +681,5 @@
 </script>
 </body>
 </html>
+
+
