@@ -280,7 +280,7 @@ const server = http.createServer(async (req, res) => {
       console.log(`[DOWNLOAD] ${title || youtubeId} (${youtubeId})`)
 
       exec(
-        `yt-dlp -f "best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${youtubeUrl}"`,
+        `yt-dlp --no-part -f "best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${youtubeUrl}"`,
         { timeout: 600000, maxBuffer: 1024 * 1024 },
         (error, stdout, stderr) => {
           if (error) {
