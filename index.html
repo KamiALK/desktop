@@ -289,7 +289,7 @@
       statusEl.textContent = 'Generando token de bar...'
 
       // 2) Generar bar token
-      const barRes = await fetch('/api/auth/bar-token', {
+      const barRes = await fetch('/api/auth/bar/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantId: confirmedTenant, adminToken })

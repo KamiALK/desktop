@@ -311,7 +311,7 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // ── PROXY: Todo /api/* y /hubs/* va al backend .NET ──
+    // ── PROXY: Todo /api/* (menos rutas locales) y /hubs/* va al backend .NET ──
     if (pathname.startsWith('/api/') && !pathname.startsWith('/api/tv/') && !pathname.startsWith('/api/download') && !pathname.startsWith('/api/check-video') && !pathname.startsWith('/api/videos')) {
       proxyToBackend(req, res, pathname, url.search)
       return
