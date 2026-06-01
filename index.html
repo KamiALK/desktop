@@ -291,8 +291,12 @@
       // 2) Generar bar token
       const barRes = await fetch('/api/auth/bar/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: confirmedTenant, adminToken })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'X-Tenant-Id': confirmedTenant
+        },
+        body: '{}'
       })
       if (!barRes.ok) {
         const err = await barRes.json().catch(() => ({}))
