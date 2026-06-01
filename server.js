@@ -6,6 +6,7 @@ const { exec } = require('child_process')
 
 const HTTP_PORT = 3000
 const VIDEOS_DIR = path.join(__dirname, 'videos')
+const API_BASE = 'https://mordekai.kamiloalca.com'
 
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true })
 
@@ -95,6 +96,76 @@ function httpRequest(url, options, body = null) {
     if (body) req.write(body)
     req.end()
   })
+}
+
+// ── PROXY para SignalR y API (HTTP/SSE/LongPolling) ──
+function proxyToBackend(req, res, pathname, search) {
+  const targetUrl = `${API_BASE}${pathname}${search}`
+
+  // Recolectar body si existe
+  let body = null
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    body = []
+    req.on('data', chunk => body.push(chunk))
+    req.on('end', () => {
+      body = Buffer.concat(body)
+      doProxy(body)
+    })
+  } else {
+    doProxy(null)
+  }
+
+  function doProxy(bodyBuffer) {
+    const parsed = new URL(targetUrl)
+    const mod = parsed.protocol === 'https:' ? https : http
+    const opts = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: parsed.hostname,
+        'accept-encoding': 'identity'
+      },
+      timeout: 30000
+    }
+    delete opts.headers['sec-fetch-site']
+    delete opts.headers['sec-fetch-mode']
+    delete opts.headers['sec-fetch-dest']
+    delete opts.headers['referer']
+    delete opts.headers['connection']
+
+    if (bodyBuffer) opts.headers['content-length'] = Buffer.byteLength(bodyBuffer)
+
+    const proxyReq = mod.request(opts, (proxyRes) => {
+      const responseHeaders = { ...proxyRes.headers }
+      delete responseHeaders['transfer-encoding']
+      delete responseHeaders['content-encoding']
+
+      res.writeHead(proxyRes.statusCode, responseHeaders)
+      proxyRes.pipe(res)
+    })
+
+    proxyReq.on('error', (err) => {
+      console.error('[PROXY ERROR]', err.message)
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Error de conexión con el servidor backend' }))
+      }
+    })
+
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy()
+      if (!res.headersSent) {
+        res.writeHead(504, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Timeout del backend' }))
+      }
+    })
+
+    if (bodyBuffer) proxyReq.write(bodyBuffer)
+    proxyReq.end()
+  }
 }
 
 // ── SERVER ──
@@ -240,47 +311,13 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // ── API: Auth Login (proxy al backend .NET) ──
-    if (pathname === '/api/auth/login' && req.method === 'POST') {
-      const body = await parseBody(req)
-      if (!body.apiUrl || !body.username || !body.password) {
-        sendJson(res, 400, { error: 'apiUrl, username y password requeridos' })
-        return
-      }
-      const baseUrl = body.apiUrl.replace(/\/+$/, '')
-      const payload = JSON.stringify({ username: body.username, password: body.password })
-      try {
-        const result = await httpRequest(`${baseUrl}/api/Auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        }, payload)
-        sendJson(res, 200, result)
-      } catch (e) {
-        sendJson(res, e.status || 500, { error: e.message || 'Error de conexión' })
-      }
+    // ── PROXY: Todo /api/* y /hubs/* va al backend .NET ──
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/tv/') && !pathname.startsWith('/api/download') && !pathname.startsWith('/api/check-video') && !pathname.startsWith('/api/videos')) {
+      proxyToBackend(req, res, pathname, url.search)
       return
     }
-
-    // ── API: Generar Bar Token (proxy al backend .NET) ──
-    if (pathname === '/api/auth/bar-token' && req.method === 'POST') {
-      const body = await parseBody(req)
-      if (!body.apiUrl || !body.tenantId || !body.adminToken) {
-        sendJson(res, 400, { error: 'apiUrl, tenantId y adminToken requeridos' })
-        return
-      }
-      const baseUrl = body.apiUrl.replace(/\/+$/, '')
-      try {
-        const result = await httpRequest(`${baseUrl}/api/auth/bar/token`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${body.adminToken}`,
-            'X-Tenant-Id': body.tenantId
-          }
-        })
-        sendJson(res, 200, result)
-      } catch (e) {
-        sendJson(res, e.status || 500, { error: e.message || 'Error de conexión' })
-      }
+    if (pathname.startsWith('/hubs/')) {
+      proxyToBackend(req, res, pathname, url.search)
       return
     }
 

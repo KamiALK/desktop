@@ -275,7 +275,7 @@
       const loginRes = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiUrl: api, username, password })
+        body: JSON.stringify({ username, password })
       })
       if (!loginRes.ok) {
         const err = await loginRes.json().catch(() => ({}))
@@ -292,7 +292,7 @@
       const barRes = await fetch('/api/auth/bar-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiUrl: api, tenantId: confirmedTenant, adminToken })
+        body: JSON.stringify({ tenantId: confirmedTenant, adminToken })
       })
       if (!barRes.ok) {
         const err = await barRes.json().catch(() => ({}))
@@ -354,7 +354,7 @@
     log('Conectando a SignalR...', 'warn')
 
     connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${_api}/hubs/bar`, {
+      .withUrl(`/hubs/bar`, {
         accessTokenFactory: () => _barToken,
         transport: signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling
       })
@@ -427,7 +427,7 @@
   async function actualizarCola() {
     if (!_api || !_tenant || !_barToken) return
     try {
-      const res = await fetch(`${_api}/api/PlayQueue`, {
+      const res = await fetch(`/api/PlayQueue`, {
         headers: { 'Authorization': `Bearer ${_barToken}`, 'X-Tenant-Id': _tenant }
       })
       if (!res.ok) return
@@ -461,7 +461,7 @@
     if (!_api || !_tenant || !_barToken) return
     log('Canción terminada, avanzando...', 'info')
     try {
-      const res = await fetch(`${_api}/api/PlayQueue/next`, {
+      const res = await fetch(`/api/PlayQueue/next`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${_barToken}`, 'X-Tenant-Id': _tenant }
       })
@@ -510,7 +510,7 @@
   async function prefetchNext(count = 3) {
     if (!_api || !_tenant || !_barToken) return
     try {
-      const res = await fetch(`${_api}/api/PlayQueue`, {
+      const res = await fetch(`/api/PlayQueue`, {
         headers: { 'Authorization': `Bearer ${_barToken}`, 'X-Tenant-Id': _tenant }
       })
       if (!res.ok) return
