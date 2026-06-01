@@ -267,16 +267,25 @@ const server = http.createServer(async (req, res) => {
         return
       }
 
+      // Validar que yt-dlp existe
+      const { spawnSync } = require('child_process')
+      const whichYt = spawnSync('which', ['yt-dlp'], { stdio: 'pipe' })
+      if (whichYt.status !== 0) {
+        sendJson(res, 500, { error: 'yt-dlp no está instalado. Corré: pkg install yt-dlp' })
+        return
+      }
+
       const outputTemplate = path.join(VIDEOS_DIR, `${youtubeId}.%(ext)s`)
       const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`
       console.log(`[DOWNLOAD] ${title || youtubeId} (${youtubeId})`)
 
       exec(
-        `yt-dlp -f "bestvideo[height<=720]+bestaudio/best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${youtubeUrl}"`,
-        { timeout: 300000 },
+        `yt-dlp -f "best[height<=720]" --merge-output-format mp4 -o "${outputTemplate}" "${youtubeUrl}"`,
+        { timeout: 600000, maxBuffer: 1024 * 1024 },
         (error, stdout, stderr) => {
           if (error) {
-            console.error(`[DOWNLOAD ERROR] ${error.message}`)
+            const msg = stderr || error.message
+            console.error(`[DOWNLOAD ERROR] ${msg}`)
             sendJson(res, 500, { error: error.message })
             return
           }
