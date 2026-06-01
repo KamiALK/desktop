@@ -1,5 +1,7 @@
 node_modules/
+videos/
 yt-dlp.exe
 *.log
 .DS_Store
 Thumbs.db
+main.js

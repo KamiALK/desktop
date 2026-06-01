@@ -1,17 +1,12 @@
 {
-  "name": "bar-desktop",
+  "name": "musicali-bar-server",
   "version": "1.0.0",
-  "description": "Musicali Bar Desktop",
-  "main": "main.js",
+  "description": "Musicali Bar Server — Standalone (Termux)",
+  "main": "server.js",
   "scripts": {
-    "start": "electron ."
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@microsoft/signalr": "^10.0.0",
-    "chromecast-api": "^0.4.2",
-    "electron": "^42.2.0"
-  }
+  "license": "ISC"
 }

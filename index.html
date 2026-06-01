@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' blob: file:; connect-src 'self' ws://192.168.0.3:5251 http://192.168.0.3:5251 ws://* http://* https://*">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' blob:; connect-src 'self' ws://*:* http://*:* https://*:* ws://*:* wss://*:*">
   <title>Musicali Bar</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -82,12 +82,6 @@
     #config-section h3 { font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
     #btn-reconnect { width:100%; padding:8px; background:#1a1a1a; border:1px solid #333; color:#ccc; font-family:'Courier New',monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; border-radius:2px; transition:all .2s; }
     #btn-reconnect:hover { background:#222; border-color:#555; color:#fff; }
-    #btn-cast { width:100%; padding:8px; border:1px solid #333; color:#ccc; font-family:'Courier New',monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; cursor:pointer; border-radius:2px; margin-top:8px; transition:all .2s; background:#2a2a1a; border-color:#555; }
-    #btn-cast:hover { background:#3a3a2a; border-color:#888; }
-    #cast-list { margin-top:6px; display:flex; flex-direction:column; gap:4px; }
-    #cast-list .cc-item { padding:4px 8px; font-size:10px; background:#1a1a1a; border:1px solid #333; border-radius:2px; cursor:pointer; color:#888; }
-    #cast-list .cc-item:hover { background:#222; color:#fff; }
-    #cast-list .cc-item.cc-active { border-color:#00ff88; color:#00ff88; }
 
     #api-url-display { font-size:10px; color:#333; margin-bottom:8px; word-break:break-all; }
 
@@ -133,7 +127,7 @@
     <h2>Iniciar sesión</h2>
     <div class="login-field">
       <label>API URL</label>
-      <input id="login-api" type="text" value="http://192.168.0.3:5251" placeholder="http://...">
+      <input id="login-api" type="text" value="" placeholder="http://backend:5251">
     </div>
     <div class="login-field">
       <label>Usuario</label>
@@ -177,11 +171,7 @@
         <h3>Conexión</h3>
         <div id="api-url-display"></div>
         <button id="btn-reconnect">⟳ Reconectar</button>
-        <button id="btn-cast">📺 Buscar Chromecast</button>
-        <div id="cast-list"></div>
-      </div>
-
-      <div id="fondo-section">
+        <div id="fondo-section">
         <h3>🖼 Fondo</h3>
         <input id="fondo-file" type="file" accept="video/*" hidden />
         <button id="btn-seleccionar-fondo">📁 Elegir video</button>
@@ -216,6 +206,19 @@
   let currentArtista = ''
   let prefetchInterval = null
   const downloadingIds = new Set()
+
+  // ── SERVER LOCAL ──
+  window.__serverTvPlay = async (filePath, titulo, artista) => {
+    try {
+      await fetch('/api/tv/play', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, titulo, artista })
+      })
+    } catch (e) {
+      console.error('[TV Play]', e)
+    }
+  }
 
   const dot = document.getElementById('status-dot')
   const logEl = document.getElementById('log')
@@ -269,7 +272,16 @@
 
     try {
       // 1) Login admin → obtenemos adminToken + tenantId del response
-      const loginResult = await window.electronAPI.login({ apiUrl: api, username, password })
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiUrl: api, username, password })
+      })
+      if (!loginRes.ok) {
+        const err = await loginRes.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${loginRes.status}`)
+      }
+      const loginResult = await loginRes.json()
       // loginResult = { token, role, userId, tenantId }
       const adminToken      = loginResult.token
       const confirmedTenant = loginResult.tenantId
@@ -277,7 +289,16 @@
       statusEl.textContent = 'Generando token de bar...'
 
       // 2) Generar bar token
-      const barResult = await window.electronAPI.generateBarToken({ apiUrl: api, tenantId: confirmedTenant, adminToken })
+      const barRes = await fetch('/api/auth/bar-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiUrl: api, tenantId: confirmedTenant, adminToken })
+      })
+      if (!barRes.ok) {
+        const err = await barRes.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${barRes.status}`)
+      }
+      const barResult = await barRes.json()
       // barResult = { token }
       const barToken = barResult.token
 
@@ -394,7 +415,9 @@
 
   // ── VIDEOS ──
   async function updateVideoCount() {
-    const videos = await window.electronAPI.listVideos()
+    const res = await fetch('/api/videos')
+    if (!res.ok) return
+    const videos = await res.json()
     document.getElementById('videos-count').textContent = `${videos.length} videos descargados`
   }
 
@@ -422,12 +445,12 @@
     const videoPath = filePath.replace(/\\/g, '/')
     const player = document.getElementById('video-player')
     player.style.display = 'block'
-    player.src = `file:///${videoPath}`
+    player.src = `/videos/${encodeURIComponent(videoPath.split('/').pop() || videoPath.split('\\').pop())}`
     player.play().catch(e => log(`Error reproduciendo: ${e.message}`, 'error'))
     document.getElementById('song-title').textContent = currentTitulo
     document.getElementById('song-artist').textContent = currentArtista
-    if (window.electronAPI?.tvPlay) {
-      window.electronAPI.tvPlay({ filePath: videoPath, titulo: currentTitulo, artista: currentArtista })
+    if (window.__serverTvPlay) {
+      window.__serverTvPlay(videoPath, currentTitulo, currentArtista)
     }
   }
 
@@ -447,15 +470,35 @@
     if (downloadingIds.has(youtubeId)) {
       log(`Esperando descarga en curso: ${youtubeId}`, 'info')
       while (downloadingIds.has(youtubeId)) { await new Promise(r => setTimeout(r, 500)) }
-      const cached = await window.electronAPI.checkVideo(youtubeId)
-      if (cached) return cached
+      const checkRes = await fetch('/api/check-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ youtubeId })
+      })
+      if (!checkRes.ok) return null
+      const checkData = await checkRes.json()
+      if (checkData.path) return checkData.path
     }
-    const existing = await window.electronAPI.checkVideo(youtubeId)
-    if (existing) return existing
+    const checkRes2 = await fetch('/api/check-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtubeId })
+    })
+    if (checkRes2.ok) {
+      const checkData2 = await checkRes2.json()
+      if (checkData2.path) return checkData2.path
+    }
     downloadingIds.add(youtubeId)
     try {
-      const r = await window.electronAPI.downloadVideo({ youtubeId, title })
-      return r.path
+      const dlRes = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ youtubeId, title })
+      })
+      if (!dlRes.ok) throw new Error(`Error ${dlRes.status}`)
+      const dlData = await dlRes.json()
+      if (dlData.path) return dlData.path
+      throw new Error(dlData.error || 'Error en descarga')
     } finally {
       downloadingIds.delete(youtubeId)
     }
@@ -475,11 +518,22 @@
       for (const item of upcoming) {
         const ytId = item.song?.youtubeId || item.youtubeId
         if (!ytId || downloadingIds.has(ytId)) continue
-        const cached = await window.electronAPI.checkVideo(ytId)
-        if (cached) continue
+        const cachedRes = await fetch('/api/check-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ youtubeId: ytId })
+        })
+        if (cachedRes.ok) {
+          const cachedData = await cachedRes.json()
+          if (cachedData.path) continue
+        }
         const title = item.song?.title || item.titulo || ytId
         downloadingIds.add(ytId)
-        window.electronAPI.downloadVideo({ youtubeId: ytId, title })
+        fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ youtubeId: ytId, title })
+        })
           .then(() => { downloadingIds.delete(ytId); log(`Precargado: ${title}`, 'success'); updateVideoCount() })
           .catch(() => downloadingIds.delete(ytId))
       }
@@ -518,32 +572,7 @@
     }
   }
 
-  // ── CAST ──
-  document.getElementById('btn-cast').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-cast')
-    btn.textContent = '🔍 Buscando...'
-    btn.disabled = true
-    const devices = await window.electronAPI.castScan()
-    const list = document.getElementById('cast-list')
-    if (devices.length === 0) {
-      list.innerHTML = '<div style="color:#555;font-size:10px;padding:4px 0">Ningún Chromecast encontrado</div>'
-    } else {
-      list.innerHTML = devices.map(d => `<div class="cc-item" data-id="${d.id}">📺 ${escHtml(d.name)}</div>`).join('')
-      list.querySelectorAll('.cc-item').forEach(el => {
-        el.addEventListener('click', async () => {
-          el.textContent = '⏳ Transmitiendo...'
-          const r = await window.electronAPI.castPlay(el.dataset.id)
-          if (r.success) { el.className = 'cc-item cc-active'; el.textContent = `📺 ${escHtml(r.name || 'Transmitiendo')}`; log(`Cast: transmitiendo a ${r.name}`, 'success') }
-          else { el.textContent = `❌ ${r.error}`; log(`Cast: ${r.error}`, 'error') }
-        })
-      })
-    }
-    btn.textContent = '📺 Buscar Chromecast'
-    btn.disabled = false
-    log(`Cast: ${devices.length} dispositivo(s) encontrado(s)`, 'info')
-  })
-
-  // ── FONDO ──
+  // ── SIDEBAR TOGGLE ──
   document.getElementById('btn-seleccionar-fondo').addEventListener('click', () => {
     document.getElementById('fondo-file').click()
   })
