@@ -5,7 +5,13 @@ const path = require('path')
 const { exec } = require('child_process')
 
 const HTTP_PORT = 3000
-const VIDEOS_DIR = path.join(__dirname, 'videos')
+
+// VIDEOS_DIR: en Termux, /sdcard/ puede tener problemas con renombrados de yt-dlp.
+// Usa $HOME/videos/ que está en el filesystem nativo de Termux.
+const VIDEOS_DIR = process.env.HOME
+  ? path.join(process.env.HOME, 'videos')
+  : path.join(__dirname, 'videos')
+
 const API_BASE = 'https://mordekai.kamiloalca.com'
 
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true })
