@@ -354,7 +354,10 @@
     log('Conectando a SignalR...', 'warn')
 
     connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${_api}/hubs/bar`, { accessTokenFactory: () => _barToken })
+      .withUrl(`${_api}/hubs/bar`, {
+        accessTokenFactory: () => _barToken,
+        transport: signalR.HttpTransportType.ServerSentEvents | signalR.HttpTransportType.LongPolling
+      })
       .withAutomaticReconnect()
       .build()
 
